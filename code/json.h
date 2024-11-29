@@ -48,10 +48,9 @@ namespace privacy
         JsonBasic(const char &ch);
         JsonBasic(const char *&chPtr);
         JsonBasic(const std::string &str);
+        ~JsonBasic();
 
         void clear();
-
-        ~JsonBasic();
     };
 }
 
@@ -83,6 +82,7 @@ public:
     void copy(const Json &js);
     void swap(Json &js) noexcept;
     void conversion_type(JsonType ttp);
+    unsigned int quote_times();
 
     explicit operator bool();
     explicit operator int();
@@ -92,6 +92,10 @@ public:
     Json &operator[](const int &n);
     Json &operator[](const std::string &str);
     Json &operator[](const char *chPtr);
+
+    Json operator[](const int &n) const;
+    Json operator[](const std::string &str) const;
+    Json operator[](const char *chPtr) const;
 
     Json &operator=(const bool &bl);
     Json &operator=(const int &it);
