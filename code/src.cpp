@@ -120,11 +120,7 @@ Json &Json::operator=(const Json &js) {
     if (m_Value == js.m_Value) {
         return *this;
     }
-    if (m_Value->quoteTimes == 0) {
-        delete m_Value;
-    } else {
-        (m_Value->quoteTimes)--;
-    }
+    only_delete();
     m_Value = js.m_Value;
     m_Value->quoteTimes++;
     return *this;
@@ -294,7 +290,16 @@ void Json::swap(Json &js) noexcept {
 }
 
 void Json::conversion_type(JsonType ttp) {
-    m_Value->conversion_type(ttp);
+    if (m_Value->quoteTimes != 0) {
+        m_Value->quoteTimes--;
+        m_Value = new JsonBasic{ttp};
+    } else {
+        m_Value->conversion_type(ttp);
+    }
+}
+
+unsigned int Json::quote_times() {
+    return m_Value->quoteTimes;
 }
 
 std::string Json::str() const {
@@ -442,6 +447,42 @@ Json &Json::operator[](const int &n) {
         m_Value->value.arr.resize(n + 1);
     }
     return m_Value->value.arr[n];
+}
+
+Json Json::operator[](const int &n) const {
+    if (m_Value->type != JSON_ARRAY) {
+        throw logic_error{
+            string("From class Json(") + to_string(this) +
+            "):Json.operator[](n)const can only be done for ARRAY! But the type is " +
+            JSON_TYPE_TO_STRING[m_Value->type] + "."
+        };
+    }
+    if (m_Value->value.arr.size() <= n) {
+        m_Value->value.arr.resize(n + 1);
+    }
+    return m_Value->value.arr[n];
+}
+
+Json Json::operator[](const std::string &str) const {
+    if (m_Value->type != JSON_OBJECT) {
+        throw logic_error{
+            string("From class Json(") + to_string(this) +
+            "):Json.operator[](n)const can only be done for OBJECT! But the type is " +
+            JSON_TYPE_TO_STRING[m_Value->type] + "."
+        };
+    }
+    return m_Value->value.obj[str];
+}
+
+Json Json::operator[](const char *chPtr) const {
+    if (m_Value->type != JSON_OBJECT) {
+        throw logic_error{
+            string("From class Json(") + to_string(this) +
+            "):Json.operator[](n)const can only be done for OBJECT! But the type is " +
+            JSON_TYPE_TO_STRING[m_Value->type] + "."
+        };
+    }
+    return m_Value->value.obj[string{chPtr}];
 }
 
 void Json::copy_highest_layer(const JsonBasic &jsb) {
@@ -715,6 +756,7 @@ Json JsonParser::parse_array() {
     m_Idx++;
     skip_white_space();
     if (m_Str[m_Idx] == ']') {
+        m_Idx++;
         return Json{JSON_ARRAY};
     }
     Json json = JSON_ARRAY;
@@ -759,6 +801,7 @@ Json JsonParser::parse_object() {
     m_Idx++;
     skip_white_space();
     if (m_Str[m_Idx] == '}') {
+        m_Idx++;
         return Json{JSON_OBJECT};
     }
     Json json{JSON_OBJECT};
@@ -820,6 +863,7 @@ Json JsonParser::parse_object() {
         json.m_Value->value.obj[key] = parse_json();
         skip_white_space();
     }
+    m_Idx++;
     return json;
 }
 
