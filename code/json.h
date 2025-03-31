@@ -1,13 +1,17 @@
-#ifndef JSON__JSON_H_
-#define JSON__JSON_H_
+#ifndef JSON_UPDATED_JSON_H
+#define JSON_UPDATED_JSON_H
 
 #include <string>
 #include <vector>
 #include <map>
+#include <variant>
+#include <memory>
+#include <fstream>
 
-namespace ns_json
-{
-class Json;
+namespace json {
+
+class Void {
+};
 
 enum JsonType {
     JSON_NULL = 0,
@@ -19,100 +23,104 @@ enum JsonType {
     JSON_OBJECT,
 };
 
+class Json;
+
+class JsonView;
+
+class JsonParser;
+
 extern const std::vector<std::string> JSON_TYPE_TO_STRING;
-extern const std::map<std::string, JsonType> STRING_TO_JSON_TYPE;
 
-namespace privacy
-{
-    struct JsonBasic {
-        unsigned int quoteTimes = 0;
-        JsonType type;
-
-        union JsonBasic_Union {
-            bool bl{};
-            int it;
-            double dbl;
-            std::string str;
-            std::vector<Json> arr;
-            std::map<std::string, Json> obj;
-            JsonBasic_Union();
-            ~JsonBasic_Union();
-        } value;
-
-        void conversion_type(JsonType ttp);
-        JsonBasic();
-        JsonBasic(JsonType tp);
-        JsonBasic(const bool &bl);
-        JsonBasic(const int &it);
-        JsonBasic(const double &dbl);
-        JsonBasic(const char &ch);
-        JsonBasic(const char *&chPtr);
-        JsonBasic(const std::string &str);
-        ~JsonBasic();
-
-        void clear();
-    };
-}
+typedef std::variant<
+        Void,
+        bool,
+        long long,
+        double,
+        std::string,
+        std::vector<Json>,
+        std::map<std::string, Json>
+> JsonBasic;
 
 class Json {
 private:
-    privacy::JsonBasic *m_Value;
-    void only_delete();
-    void copy_highest_layer(const privacy::JsonBasic &jsb);
-    void self_separate();
-    void copy_highest_layer(const Json &js);
-
-    friend class JsonParser;
+    std::shared_ptr<JsonBasic> m_Value;
 
 public:
+    friend class JsonParser;
+
     Json();
-    Json(const JsonType &tp);
-    Json(const bool &bl);
-    Json(const int &it);
-    Json(const double &dbl);
-    Json(const std::string &str);
-    Json(const char *&ch);
-    Json(const Json &js);
+    Json(const JsonType& tp);
+    Json(const bool& bl);
+    Json(const int& it);
+    Json(const double& dbl);
+    Json(const std::string& str);
+    Json(const char* ch);
+    Json(const Json& js);
+    Json(Json&& js) noexcept;
+
     ~Json();
 
-    [[nodiscard]] JsonType type() const;
-    [[nodiscard]] std::string type_str() const;
-    [[nodiscard]] std::string str() const;
-    void clear();
-    void copy(const Json &js);
-    void swap(Json &js) noexcept;
-    void conversion_type(JsonType ttp);
-    unsigned int quote_times();
+    Json& operator=(const bool& bl);
+    Json& operator=(const int& it);
+    Json& operator=(const char& ch);
+    Json& operator=(const char* chPtr);
+    Json& operator=(const std::string& str);
+    Json& operator=(const Json& js);
+    Json& operator=(Json&& js) noexcept;
+
+    Json& operator[](unsigned int n);
+    Json& operator[](const std::string& str);
+    Json& operator[](const char* chPtr);
 
     explicit operator bool();
     explicit operator int();
+    explicit operator long long();
+    explicit operator float();
     explicit operator double();
-    explicit operator std::string();
+    operator std::string();
 
-    Json &operator[](const int &n);
-    Json &operator[](const std::string &str);
-    Json &operator[](const char *chPtr);
+    [[nodiscard]] bool empty() const noexcept;
+    [[nodiscard]] unsigned int size() const;
+    void clear();
+    void copy(const Json& js);
+    [[nodiscard]] JsonType get_type() const;
+    void set_type(JsonType ttp);
+    [[nodiscard]] std::string str() const;
 
-    Json operator[](const int &n) const;
-    Json operator[](const std::string &str) const;
-    Json operator[](const char *chPtr) const;
+    //ARRAY action
+    void resize(unsigned int new_size);
+    void push_back(const Json& js);
+    [[nodiscard]] unsigned int capacity() const;
 
-    Json &operator=(const bool &bl);
-    Json &operator=(const int &it);
-    Json &operator=(const char &ch);
-    Json &operator=(const char *chPtr);
-    Json &operator=(const std::string &str);
-    Json &operator=(const Json &js);
+    //OBJECT action
+    void erase(const std::string& str);
+    void erase(const char* chPtr);
+    void merge(const Json& js);
 
-    //JSON_ARRAY action
-    void push_back(const Json &js);
-    Json &at(const int &n);
+    class iterator {
+    private:
+        std::variant<std::vector<Json>::iterator,
+                std::map<std::string, Json>::iterator> m_Value;
+    public:
+        friend class Json;
 
-    //JSON_OBJECT action
-    Json &at(const std::string &str);
-    Json &at(const char *chPtr);
+        iterator() = default;
+        iterator(iterator&) = default;
+        iterator(const iterator&) = default;
+        iterator(iterator&&) = default;
+        ~iterator() = default;
+
+        iterator& operator++();
+        iterator operator++(int);
+
+
+        std::string key();
+        Json& value();
+    };
+
+    iterator begin();
+    iterator end();
 };
-
 
 class JsonParser {
 private:
@@ -120,8 +128,6 @@ private:
     unsigned long long m_Idx;
     Json m_Json;
     void read_token_char();
-    char peek_token_char();
-    bool is_white_space();
     void skip_white_space();
 
     Json parse_json();
@@ -134,9 +140,10 @@ private:
 
 public:
     JsonParser() = delete;
-    JsonParser(const std::string &str);
+    JsonParser(const std::string& str);
     operator Json();
 };
+
 }
 
-#endif //JSON__JSON_H_
+#endif //JSON_UPDATED_JSON_H
