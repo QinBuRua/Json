@@ -1,26 +1,24 @@
 #include "json.h"
 #include <stdexcept>
 #include <sstream>
-#include <stack>
-#include <fstream>
-#include <iostream>
 
+using namespace json;
+
+using std::get;
+
+using std::unique_ptr;
+using std::shared_ptr;
+using std::weak_ptr;
+
+using std::make_shared;
+
+using std::variant;
 using std::string;
-using std::string_view;
 using std::vector;
 using std::map;
-using std::stack;
 
 using std::logic_error;
-using std::out_of_range;
 using std::runtime_error;
-
-using std::ifstream;
-using std::ofstream;
-using std::fstream;
-
-using namespace ns_json;
-using namespace ns_json::privacy;
 
 template<typename T>
 static string to_string(T content) {
@@ -29,302 +27,283 @@ static string to_string(T content) {
     return sstr.str();
 }
 
-const std::vector<std::string> ns_json::JSON_TYPE_TO_STRING{
-    "NULL",
-    "BOOL",
-    "INT",
-    "FLOAT",
-    "STRING",
-    "ARRAY",
-    "OBJECT",
+const std::vector<std::string> json::JSON_TYPE_TO_STRING{
+        "NULL",
+        "BOOL",
+        "INT",
+        "FLOAT",
+        "STRING",
+        "ARRAY",
+        "OBJECT",
 };
-const std::map<std::string, JsonType> ns_json::STRING_TO_JSON_TYPE{
-    {"NULL", JSON_NULL},
-    {"BOOL", JSON_BOOL},
-    {"INT", JSON_INT},
-    {"STRING", JSON_STRING},
-    {"FLOAT", JSON_FLOAT},
-    {"ARRAY", JSON_ARRAY},
-    {"OBJECT", JSON_OBJECT},
-};
+
 
 Json::Json() {
-    m_Value = new JsonBasic{};
+    m_Value = make_shared<JsonBasic>(Void{});
 }
 
-Json::Json(const bool &bl) {
-    m_Value = new JsonBasic{static_cast<bool>(bl)};
-}
+Json::~Json() = default;
 
-Json::operator bool() {
-    if (m_Value->type != JSON_BOOL) {
-        throw logic_error(string("From class Json(") + to_string(this)
-                          + "):Json.bool() can only be done for BOOL! But the type of this variable is "
-                          + JSON_TYPE_TO_STRING[m_Value->type] + "."
-        );
-    }
-    return m_Value->value.bl;
-}
-
-JsonType Json::type() const {
-    return m_Value->type;
-}
-
-Json &Json::operator=(const bool &bl) {
-    if (m_Value->quoteTimes != 0) {
-        only_delete();
-        m_Value = new JsonBasic{bl};
-        return *this;
-    }
-    if (m_Value->type != JSON_BOOL) {
-        m_Value->conversion_type(JSON_BOOL);
-    }
-    m_Value->value.bl = bl;
-    return *this;
-}
-
-void Json::clear() {
-    if (m_Value->quoteTimes == 0) {
-        m_Value->clear();
-    } else {
-        m_Value->quoteTimes--;
-        m_Value = new JsonBasic{};
-    }
-}
-
-Json::Json(const JsonType &tp) {
-    m_Value = new JsonBasic(static_cast<JsonType>(tp));
-}
-
-Json::Json(const int &it) {
-    m_Value = new JsonBasic(JSON_INT);
-    m_Value->value.it = it;
-}
-
-Json::Json(const double &dbl) {
-    m_Value = new JsonBasic{JSON_FLOAT};
-    m_Value->value.dbl = dbl;
-}
-
-Json::Json(const string &str) {
-    m_Value = new JsonBasic{JSON_STRING};
-    m_Value->value.str = str;
-}
-
-Json::Json(const Json &js) {
-    m_Value = js.m_Value;
-    (m_Value->quoteTimes)++;
-}
-
-Json &Json::operator=(const Json &js) {
-    if (m_Value == js.m_Value) {
-        return *this;
-    }
-    only_delete();
-    m_Value = js.m_Value;
-    m_Value->quoteTimes++;
-    return *this;
-}
-
-Json &Json::operator=(const string &str) {
-    if (m_Value->quoteTimes != 0) {
-        m_Value->quoteTimes--;
-        m_Value = new JsonBasic{str};
-        return *this;
-    }
-    if (m_Value->type != JSON_STRING) {
-        m_Value->conversion_type(JSON_STRING);
-    }
-    m_Value->value.str = str;
-    return *this;
-}
-
-void Json::only_delete() {
-    if (m_Value->quoteTimes == 0) {
-        m_Value->clear();
-        delete m_Value;
-    } else {
-        m_Value->quoteTimes--;
-        m_Value = nullptr;
-    }
-}
-
-Json::~Json() {
-    only_delete();
-}
-
-Json::operator std::string() {
-    if (m_Value->type != JSON_STRING) {
-        throw logic_error(string("From class Json(") + to_string(this)
-                          + "):Json.string() can only be done for STRING! But the type of this variable is "
-                          + JSON_TYPE_TO_STRING[m_Value->type] + "."
-        );
-    }
-    return m_Value->value.str;
-}
-
-Json::operator int() {
-    if (m_Value->type != JSON_INT) {
-        throw logic_error(string("From class Json(") + to_string(this)
-                          + "):Json.int() can only be done for INT! But the type of this variable is "
-                          + JSON_TYPE_TO_STRING[m_Value->type] + "."
-        );
-    }
-    return m_Value->value.it;
-}
-
-Json::operator double() {
-    if (m_Value->type != JSON_FLOAT) {
-        throw logic_error(string("From class Json(") + to_string(this)
-                          + "):Json.double() can only be done for FLOAT! But the type of this variable is "
-                          + JSON_TYPE_TO_STRING[m_Value->type]);
-    }
-    return m_Value->value.dbl;
-}
-
-Json &Json::operator=(const int &it) {
-    if (m_Value->quoteTimes != 0) {
-        only_delete();
-        m_Value = new JsonBasic{it};
-        return *this;
-    }
-    if (m_Value->type != JSON_INT) {
-        m_Value->conversion_type(JSON_INT);
-    }
-    m_Value->value.it = it;
-    return *this;
-}
-
-Json &Json::operator[](const string &str) {
-    if (m_Value->type != JSON_OBJECT) {
-        only_delete();
-        m_Value = new JsonBasic{JSON_OBJECT};
-    } else if (m_Value->quoteTimes != 0) {
-        m_Value->quoteTimes--;
-        const JsonBasic &that = *m_Value;
-        m_Value = new JsonBasic{};
-        this->copy_highest_layer(that);
-    }
-    return m_Value->value.obj[str];
-}
-
-void Json::copy(const Json &js) {
-    if (m_Value == js.m_Value) {
-        return;
-    }
-    only_delete();
-    switch (js.m_Value->type) {
+Json::Json(const JsonType& tp) {
+    switch (tp) {
         case JSON_NULL: {
-            m_Value = new JsonBasic{};
+            m_Value = make_shared<JsonBasic>(Void{});
             break;
         }
         case JSON_BOOL: {
-            m_Value = new JsonBasic{js.m_Value->value.bl};
+            m_Value = make_shared<JsonBasic>(false);
             break;
         }
         case JSON_INT: {
-            m_Value = new JsonBasic{js.m_Value->value.it};
+            m_Value = make_shared<JsonBasic>(0l);
             break;
         }
         case JSON_FLOAT: {
-            m_Value = new JsonBasic{js.m_Value->value.dbl};
+            m_Value = make_shared<JsonBasic>(double(0));
             break;
         }
         case JSON_STRING: {
-            m_Value = new JsonBasic(js.m_Value->value.str);
+            m_Value = make_shared<JsonBasic>(string{});
             break;
         }
         case JSON_ARRAY: {
-            m_Value = new JsonBasic{JSON_ARRAY};
-            m_Value->value.arr.resize(js.m_Value->value.arr.size());
-            for (auto iterThis = m_Value->value.arr.begin(),
-                      iterThat = js.m_Value->value.arr.begin();
-                 iterThis != m_Value->value.arr.end();
-                 ++iterThis, ++iterThat) {
-                iterThis->copy(*iterThat);
+            m_Value = make_shared<JsonBasic>(vector<Json>{});
+            break;
+        }
+        case JSON_OBJECT: {
+            m_Value = make_shared<JsonBasic>(map<string, Json>{});
+            break;
+        }
+        default:
+            break;
+    }
+}
+
+Json::Json(const bool& bl) {
+    m_Value = make_shared<JsonBasic>(bl);
+}
+
+Json::Json(const int& it) {
+    m_Value = make_shared<JsonBasic>(it);
+}
+
+Json::Json(const double& dbl) {
+    m_Value = make_shared<JsonBasic>(dbl);
+}
+
+Json::Json(const std::string& str) {
+    m_Value = make_shared<JsonBasic>(str);
+}
+
+Json::Json(const char* ch) {
+    m_Value = make_shared<JsonBasic>(ch);
+}
+
+Json::Json(const Json& js) = default;
+
+Json::Json(Json&& js) noexcept = default;
+
+Json& Json::operator=(const bool& bl) {
+    if (m_Value.use_count() > 1) {
+        m_Value = make_shared<JsonBasic>(bl);
+    } else {
+        *m_Value = bl;
+    }
+    return *this;
+}
+
+Json& Json::operator=(const int& it) {
+    if (m_Value.use_count() > 1) {
+        m_Value = make_shared<JsonBasic>(it);
+    } else {
+        *m_Value = it;
+    }
+    return *this;
+}
+
+Json& Json::operator=(const char& ch) {
+    if (m_Value.use_count() > 1) {
+        m_Value = make_shared<JsonBasic>(string{ch, 1});
+    } else {
+        *m_Value = string{ch, 1};
+    }
+    return *this;
+}
+
+Json& Json::operator=(const char* chPtr) {
+    if (m_Value.use_count() > 1) {
+        m_Value = make_shared<JsonBasic>(std::move(string{chPtr}));
+    } else {
+        *m_Value = std::move(string{chPtr});
+    }
+    return *this;
+}
+
+Json& Json::operator=(const std::string& str) {
+    if (m_Value.use_count() > 1) {
+        m_Value = make_shared<JsonBasic>(str);
+    } else {
+        *m_Value = str;
+    }
+    return *this;
+}
+
+Json& Json::operator=(const Json& js) {
+    m_Value = js.m_Value;
+    return *this;
+}
+
+Json& Json::operator=(Json&& js) noexcept = default;
+
+Json& Json::operator[](unsigned int n) {
+    if (m_Value.use_count() > 1) {
+        m_Value = make_shared<JsonBasic>(get<vector<Json>>(*m_Value));
+    }
+    return get<vector<Json>>(*m_Value)[n];
+}
+
+Json& Json::operator[](const std::string& str) {
+    if (m_Value.use_count() > 1) {
+        m_Value = make_shared<JsonBasic>(get<map<string, Json>>(*m_Value));
+    }
+    return get<map<string, Json>>(*m_Value)[str];
+}
+
+Json& Json::operator[](const char* chPtr) {
+    if (m_Value.use_count() > 1) {
+        m_Value = make_shared<JsonBasic>(get<map<string, Json>>(*m_Value));
+    }
+    return get<map<string, Json>>(*m_Value)[string{chPtr}];
+}
+
+Json::operator bool() {
+    return get<bool>(*m_Value);
+}
+
+Json::operator int() {
+    return static_cast<int>(get<long long>(*m_Value));
+}
+
+Json::operator long long() {
+    return get<long long>(*m_Value);
+}
+
+Json::operator float() {
+    return static_cast<float>(get<double>(*m_Value));
+}
+
+Json::operator double() {
+    return get<double>(*m_Value);
+}
+
+Json::operator std::string() {
+    return get<string>(*m_Value);
+}
+
+bool Json::empty() const noexcept {
+    switch (m_Value->index()) {
+        case JSON_NULL:
+            return true;
+        case JSON_STRING:
+            return get<string>(*m_Value).empty();
+        case JSON_ARRAY:
+            return get<vector<Json>>(*m_Value).empty();
+        case JSON_OBJECT:
+            return get<map<string, Json>>(*m_Value).empty();
+        default:
+            return false;
+    }
+}
+
+unsigned int Json::size() const {
+    return get<vector<Json>>(*m_Value).size();
+}
+
+
+void Json::clear() {
+    m_Value = make_shared<JsonBasic>(Void{});
+}
+
+void Json::copy(const Json& js) {
+    if (m_Value == js.m_Value) {
+        return;
+    }
+    switch (js.m_Value->index()) {
+        case JSON_NULL: {
+            m_Value = make_shared<JsonBasic>(Void{});
+            break;
+        }
+        case JSON_BOOL: {
+            m_Value = make_shared<JsonBasic>(get<bool>(*js.m_Value));
+            break;
+        }
+        case JSON_INT: {
+            m_Value = make_shared<JsonBasic>(get<long long>(*js.m_Value));
+            break;
+        }
+        case JSON_FLOAT: {
+            m_Value = make_shared<JsonBasic>(get<double>(*js.m_Value));
+            break;
+        }
+        case JSON_STRING: {
+            m_Value = make_shared<JsonBasic>(get<string>(*js.m_Value));
+            break;
+        }
+        case JSON_ARRAY: {
+            auto& thatArray = get<vector<Json>>(*js.m_Value);
+            m_Value = make_shared<JsonBasic>(vector<Json>(thatArray.size()));
+            for (auto iter = get<vector<Json>>(*m_Value).begin(),
+                         thatIter = thatArray.begin();
+                 thatIter != thatArray.end();
+                 iter++, thatIter++) {
+                iter->copy(*thatIter);
             }
             break;
         }
         case JSON_OBJECT: {
-            m_Value = new JsonBasic{JSON_OBJECT};
-            for (auto iter = js.m_Value->value.obj.begin();
-                 iter != js.m_Value->value.obj.end();
-                 ++iter) {
-                m_Value->value.obj[iter->first].copy(iter->second);
+            auto thatJson = get<map<string, Json>>(*js.m_Value);
+            auto thisJson = get<map<string, Json>>(*m_Value);
+            m_Value = make_shared<JsonBasic>(JSON_OBJECT);
+            for (auto& iter: thatJson) {
+                thisJson[iter.first].copy(iter.second);
             }
             break;
         }
     }
 }
 
-Json &Json::operator=(const char *chPtr) {
-    if (m_Value->quoteTimes != 0) {
-        only_delete();
-        m_Value = new JsonBasic(static_cast<const char*&>(chPtr));
-        return *this;
-    }
-    if (m_Value->type != JSON_STRING) {
-        m_Value->conversion_type(JSON_STRING);
-    }
-    m_Value->value.str = chPtr;
-    return *this;
+JsonType Json::get_type() const {
+    return JsonType(m_Value->index());
 }
 
-Json &Json::operator=(const char &ch) {
-    if (m_Value->quoteTimes != 0) {
-        only_delete();
-        m_Value = new JsonBasic{static_cast<const char&>(ch)};
-        return *this;
-    }
-    if (m_Value->type != JSON_STRING) {
-        m_Value->conversion_type(JSON_STRING);
-    }
-    m_Value->value.str = ch;
-    return *this;
-}
-
-void Json::swap(Json &js) noexcept {
-    JsonBasic *temp = m_Value;
-    m_Value = js.m_Value;
-    js.m_Value = temp;
-}
-
-void Json::conversion_type(JsonType ttp) {
-    if (m_Value->quoteTimes != 0) {
-        m_Value->quoteTimes--;
-        m_Value = new JsonBasic{ttp};
-    } else {
-        m_Value->conversion_type(ttp);
-    }
-}
-
-unsigned int Json::quote_times() {
-    return m_Value->quoteTimes;
+void Json::set_type(JsonType ttp) {
+    m_Value = make_shared<JsonBasic>(ttp);
 }
 
 std::string Json::str() const {
-    switch (m_Value->type) {
+    switch (m_Value->index()) {
         case JSON_NULL: {
             return string{"null"};
         }
         case JSON_BOOL: {
-            if (m_Value->value.bl == true) {
+            if (get<bool>(*m_Value)) {
                 return string{"true"};
             } else {
                 return string{"false"};
             }
         }
         case JSON_INT: {
-            return std::to_string(m_Value->value.it);
+            return std::to_string(get<long long>(*m_Value));
         }
         case JSON_FLOAT: {
-            return std::to_string(m_Value->value.dbl);
+            return std::to_string(get<double>(*m_Value));
         }
         case JSON_STRING: {
             string res{};
             res += '"';
-            for (auto i = 0; i < m_Value->value.str.length(); i++) {
-                switch (m_Value->value.str[i]) {
+            const auto& str = get<string>(*m_Value);
+            for (auto i = 0; i < str.length(); i++) {
+                switch (str[i]) {
                     case '\\': {
                         res += R"(\\)";
                         break;
@@ -342,7 +321,7 @@ std::string Json::str() const {
                         break;
                     }
                     default: {
-                        res += m_Value->value.str[i];
+                        res += str[i];
                         break;
                     }
                 }
@@ -351,12 +330,13 @@ std::string Json::str() const {
             return res;
         }
         case JSON_ARRAY: {
-            if (m_Value->value.arr.empty()) {
+            const auto& arr = get<vector<Json>>(*m_Value);
+            if (arr.empty()) {
                 return string{"[]"};
             }
             string str = "[";
-            str += m_Value->value.arr.front().str();
-            for (auto iter = ++m_Value->value.arr.begin(); iter != m_Value->value.arr.end(); ++iter) {
+            str += arr.front().str();
+            for (auto iter = ++arr.begin(); iter != arr.end(); ++iter) {
                 str += ",";
                 str += iter->str();
             }
@@ -364,14 +344,15 @@ std::string Json::str() const {
             return str;
         }
         case JSON_OBJECT: {
-            if (m_Value->value.obj.empty()) {
+            const auto& obj = get<map<string, Json>>(*m_Value);
+            if (obj.empty()) {
                 return string{"{}"};
             }
             string str = "{\"";
-            str += m_Value->value.obj.begin()->first;
+            str += obj.begin()->first;
             str += "\":";
-            str += m_Value->value.obj.begin()->second.str();
-            for (auto iter = ++m_Value->value.obj.begin(); iter != m_Value->value.obj.end(); ++iter) {
+            str += obj.begin()->second.str();
+            for (auto iter = ++obj.begin(); iter != obj.end(); ++iter) {
                 str += ",\"";
                 str += iter->first;
                 str += "\":";
@@ -380,217 +361,93 @@ std::string Json::str() const {
             str += "}";
             return str;
         }
-        default: break;
+        default:
+            break;
     }
-    throw runtime_error(
-        string("From class Json(") + to_string(this) + ").str():Unknown Error!!!It is impossible to run here!!!");
     return string{};
 }
 
-std::string Json::type_str() const {
-    return JSON_TYPE_TO_STRING[m_Value->type];
+void Json::resize(unsigned int new_size) {
+    get<vector<Json>>(*m_Value).resize(new_size);
 }
 
-Json::Json(const char *&ch) {
-    m_Value = new JsonBasic{ch};
+void Json::push_back(const Json& js) {
+    if (m_Value.use_count() > 1) {
+        m_Value = make_shared<JsonBasic>(get<vector<Json>>(*m_Value));
+    }
+    get<vector<Json>>(*m_Value).push_back(js);
 }
 
-void Json::copy_highest_layer(const Json &js) {
-    only_delete();
-    switch (js.m_Value->type) {
-        case JSON_NULL: {
-            m_Value = new JsonBasic{};
-            break;
-        }
-        case JSON_BOOL: {
-            m_Value = new JsonBasic{js.m_Value->value.bl};
-            break;
-        }
-        case JSON_INT: {
-            m_Value = new JsonBasic{js.m_Value->value.it};
-            break;
-        }
-        case JSON_FLOAT: {
-            m_Value = new JsonBasic{js.m_Value->value.dbl};
-            break;
-        }
-        case JSON_STRING: {
-            m_Value = new JsonBasic(js.m_Value->value.str);
-            break;
-        }
-        case JSON_ARRAY: {
-            m_Value = new JsonBasic{};
-            m_Value->type = JSON_ARRAY;
-            new(&m_Value->value.arr) vector<Json>(js.m_Value->value.arr);
-            break;
-        }
-        case JSON_OBJECT: {
-            m_Value = new JsonBasic{};
-            m_Value->type = JSON_OBJECT;
-            new(&m_Value->value.obj) map<string, Json>(js.m_Value->value.obj);
-            break;
-        }
-    }
+unsigned int Json::capacity() const {
+    return get<vector<Json>>(*m_Value).capacity();
 }
 
-Json &Json::operator[](const int &n) {
-    if (m_Value->type != JSON_ARRAY) {
-        only_delete();
-        m_Value = new JsonBasic{JSON_ARRAY};
-    } else if (m_Value->quoteTimes != 0) {
-        m_Value->quoteTimes--;
-        const JsonBasic &that = *m_Value;
-        m_Value = new JsonBasic{};
-        this->copy_highest_layer(that);
-    }
-    if (m_Value->value.arr.size() <= n) {
-        m_Value->value.arr.resize(n + 1);
-    }
-    return m_Value->value.arr[n];
+
+void Json::erase(const std::string& str) {
+    get<map<string, Json>>(*m_Value).erase(str);
 }
 
-Json Json::operator[](const int &n) const {
-    if (m_Value->type != JSON_ARRAY) {
-        throw logic_error{
-            string("From class Json(") + to_string(this) +
-            "):Json.operator[](n)const can only be done for ARRAY! But the type is " +
-            JSON_TYPE_TO_STRING[m_Value->type] + "."
-        };
-    }
-    if (m_Value->value.arr.size() <= n) {
-        m_Value->value.arr.resize(n + 1);
-    }
-    return m_Value->value.arr[n];
+void Json::erase(const char* chPtr) {
+    get<map<string, Json>>(*m_Value).erase(chPtr);
 }
 
-Json Json::operator[](const std::string &str) const {
-    if (m_Value->type != JSON_OBJECT) {
-        throw logic_error{
-            string("From class Json(") + to_string(this) +
-            "):Json.operator[](n)const can only be done for OBJECT! But the type is " +
-            JSON_TYPE_TO_STRING[m_Value->type] + "."
-        };
-    }
-    return m_Value->value.obj[str];
+void Json::merge(const Json& js) {
+    get<map<string, Json>>(*m_Value).merge(get<map<string, Json>>(*js.m_Value));
 }
 
-Json Json::operator[](const char *chPtr) const {
-    if (m_Value->type != JSON_OBJECT) {
-        throw logic_error{
-            string("From class Json(") + to_string(this) +
-            "):Json.operator[](n)const can only be done for OBJECT! But the type is " +
-            JSON_TYPE_TO_STRING[m_Value->type] + "."
-        };
+Json::iterator& Json::iterator::operator++() {
+    if (m_Value.index() == 0) {
+        ++get<vector<Json>::iterator>(m_Value);
+    } else {
+        ++get<map<string, Json>::iterator>(m_Value);
     }
-    return m_Value->value.obj[string{chPtr}];
+    return *this;
 }
 
-void Json::copy_highest_layer(const JsonBasic &jsb) {
-    only_delete();
-    switch (jsb.type) {
-        case JSON_NULL: {
-            m_Value = new JsonBasic{};
-            break;
-        }
-        case JSON_BOOL: {
-            m_Value = new JsonBasic{jsb.value.bl};
-            break;
-        }
-        case JSON_INT: {
-            m_Value = new JsonBasic{jsb.value.it};
-            break;
-        }
-        case JSON_FLOAT: {
-            m_Value = new JsonBasic{jsb.value.dbl};
-            break;
-        }
-        case JSON_STRING: {
-            m_Value = new JsonBasic(jsb.value.str);
-            break;
-        }
-        case JSON_ARRAY: {
-            m_Value = new JsonBasic{};
-            m_Value->type = JSON_ARRAY;
-            new(&m_Value->value.arr) vector<Json>(jsb.value.arr);
-            break;
-        }
-        case JSON_OBJECT: {
-            m_Value = new JsonBasic{};
-            m_Value->type = JSON_OBJECT;
-            new(&m_Value->value.obj) map<string, Json>{jsb.value.obj};
-            break;
-        }
+std::string Json::iterator::key() {
+    return get<map<string, Json>::iterator>(m_Value)->first;
+}
+
+Json& Json::iterator::value() {
+    if (m_Value.index() == 0) {
+        return *get<vector<Json>::iterator>(m_Value);
+    } else {
+        return get<map<string, Json>::iterator>(m_Value)->second;
     }
 }
 
-Json &Json::operator[](const char *chPtr) {
-    if (m_Value->type != JSON_OBJECT) {
-        only_delete();
-        m_Value = new JsonBasic{JSON_OBJECT};
-    } else if (m_Value->quoteTimes != 0) {
-        m_Value->quoteTimes--;
-        const JsonBasic &that = *m_Value;
-        m_Value = new JsonBasic{};
-        this->copy_highest_layer(that);
+Json::iterator Json::begin() {
+    iterator iter;
+    if (m_Value->index() == JSON_ARRAY) {
+        iter.m_Value = get<vector<Json>>(*m_Value).begin();
+    } else if (m_Value->index() == JSON_OBJECT) {
+        iter.m_Value = get<map<string, Json>>(*m_Value).begin();
+    } else {
+        throw logic_error{"From class json::Json(" + to_string(this) +
+                          ").begin():iterator can only use for ARRAY or OBJECT, but the type is " +
+                          JSON_TYPE_TO_STRING[m_Value->index()] + "!"};
     }
-    return m_Value->value.obj[string(chPtr)];
+    return iter;
 }
 
-void Json::push_back(const Json &js) {
-    if (m_Value->type != JSON_ARRAY) {
-        throw logic_error(string("From class Json(") + to_string(this) + string(
-                              "):Json.push_pack() can only be done for ARRAY, but the type of this variable is "
-                              + JSON_TYPE_TO_STRING[m_Value->type]) + ".");
-    } else if (m_Value->quoteTimes != 0) {
-        self_separate();
+Json::iterator Json::end() {
+    iterator iter;
+    if (m_Value->index() == JSON_ARRAY) {
+        iter.m_Value = get<vector<Json>>(*m_Value).end();
+    } else if (m_Value->index() == JSON_OBJECT) {
+        iter.m_Value = get<map<string, Json>>(*m_Value).end();
+    } else {
+        throw logic_error{"From class json::Json(" + to_string(this) +
+                          ").end():iterator can only use for ARRAY or OBJECT, but the type is " +
+                          JSON_TYPE_TO_STRING[m_Value->index()] + "!"};
     }
-    m_Value->value.arr.push_back(js);
+    return iter;
 }
 
-Json &Json::at(const int &n) {
-    if (n < 0) {
-        throw out_of_range(string("From class Json(") + to_string(this) +
-                           "):Json.operator[](const int& n), args-n have to be >=0, but args-n==" + std::to_string(n));
-    }
-    if (m_Value->type != JSON_ARRAY) {
-        only_delete();
-        m_Value = new JsonBasic{JSON_ARRAY};
-    } else if (m_Value->quoteTimes != 0) {
-        m_Value->quoteTimes--;
-        const JsonBasic &that = *m_Value;
-        m_Value = new JsonBasic{};
-        this->copy_highest_layer(that);
-    }
-    if (m_Value->value.arr.size() <= n) {
-        m_Value->value.arr.resize(n + 1);
-    }
-    return m_Value->value.arr[n];
-}
-
-Json &Json::at(const std::string &str) {
-    if (m_Value->type != JSON_OBJECT) {
-        only_delete();
-        m_Value = new JsonBasic{JSON_OBJECT};
-    } else if (m_Value->quoteTimes != 0) {
-        m_Value->quoteTimes--;
-        const JsonBasic &that = *m_Value;
-        m_Value = new JsonBasic{};
-        this->copy_highest_layer(that);
-    }
-    return m_Value->value.obj.at(str);
-}
-
-Json &Json::at(const char *chPtr) {
-    if (m_Value->type != JSON_OBJECT) {
-        only_delete();
-        m_Value = new JsonBasic{JSON_OBJECT};
-    } else if (m_Value->quoteTimes != 0) {
-        m_Value->quoteTimes--;
-        const JsonBasic &that = *m_Value;
-        m_Value = new JsonBasic{};
-        this->copy_highest_layer(that);
-    }
-    return m_Value->value.obj.at(string{chPtr});
+JsonParser::JsonParser(const std::string& str) {
+    m_Str = str;
+    m_Idx = 0;
+    m_Json = parse_json();
 }
 
 void JsonParser::read_token_char() {
@@ -600,22 +457,10 @@ void JsonParser::read_token_char() {
     }
     if (m_Idx >= m_Str.length()) {
         throw logic_error(
-            string("From class JsonParser(") + to_string(this) +
-            "):Parse error(c:" + std::to_string(m_Idx) +
-            "):This str of Json is NOT intact. Probably it misses ']' or '}'.");
+                string("From class JsonParser(") + to_string(this) +
+                "):Parse error(c:" + std::to_string(m_Idx) +
+                "):This str of Json is NOT intact. Probably it misses ']' or '}'.");
     }
-}
-
-char JsonParser::peek_token_char() {
-    unsigned long long tmp = m_Idx + 1;
-    while (m_Str[tmp] == ' ' || m_Str[tmp] == '\t' || m_Str[tmp] == '\n') {
-        tmp++;
-    }
-    return m_Str[tmp];
-}
-
-bool JsonParser::is_white_space() {
-    return (m_Str[m_Idx] == ' ' || m_Str[m_Idx] == '\t' || m_Str[m_Idx] == '\n' || m_Str[m_Idx] == '\r');
 }
 
 void JsonParser::skip_white_space() {
@@ -656,11 +501,12 @@ Json JsonParser::parse_json() {
         case '{': {
             return parse_object();
         }
-        default: break;
+        default:
+            break;
     }
     throw logic_error{
-        string("From class JsonParser(") + to_string(this) + "):Parse error(c:" + std::to_string(m_Idx) +
-        "):Unexpected character '" + m_Str[m_Idx] + "'."
+            string("From class JsonParser(") + to_string(this) + "):Parse error(c:" + std::to_string(m_Idx) +
+            "):Unexpected character '" + m_Str[m_Idx] + "'."
     };
 }
 
@@ -670,8 +516,8 @@ Json JsonParser::parse_null() {
         return Json{JSON_NULL};
     } else {
         throw logic_error(
-            string("From class JsonParser(") + to_string(this) +
-            "):Parse null error(c:" + std::to_string(m_Idx) + ").");
+                string("From class JsonParser(") + to_string(this) +
+                "):Parse null error(c:" + std::to_string(m_Idx) + ").");
     }
 }
 
@@ -684,8 +530,8 @@ Json JsonParser::parse_bool() {
         return Json{true};
     } else {
         throw logic_error(
-            string("From class JsonParser(") + to_string(this) +
-            "):Parse bool error(c:" + std::to_string(m_Idx) + ").");
+                string("From class JsonParser(") + to_string(this) +
+                "):Parse bool error(c:" + std::to_string(m_Idx) + ").");
     }
 }
 
@@ -765,29 +611,31 @@ Json JsonParser::parse_array() {
     while (m_Str[m_Idx] != ']') {
         if (m_Str[m_Idx] != ',') {
             throw logic_error{
-                string("From class JsonParser(") + to_string(this) + "):Parse array error(c:" + std::to_string(m_Idx) +
-                "):This str of Json misses a ','."
+                    string("From class JsonParser(") + to_string(this) + "):Parse array error(c:" +
+                    std::to_string(m_Idx) +
+                    "):This str of Json misses a ','."
             };
         }
         m_Idx++;
 
         try {
             json.push_back(parse_json());
-        } catch (logic_error &logicError) {
+        } catch (logic_error& logicError) {
             if (string(logicError.what()).find("Unexpected character ']'") != string::npos) {
                 throw logic_error{
-                    string("From class JsonParser(") + to_string(this) + "):Parse array error(c:" +
-                    std::to_string(m_Idx) + "):There is NOT a value between ',' and ']'."
+                        string("From class JsonParser(") + to_string(this) + "):Parse array error(c:" +
+                        std::to_string(m_Idx) + "):There is NOT a value between ',' and ']'."
                 };
             } else if (string(logicError.what()).find("Unexpected character ','") != string::npos) {
                 throw logic_error{
-                    string("From class JsonParser(") + to_string(this) + "):Parse array error(c:" +
-                    std::to_string(m_Idx) + "):There is NOT a value between ',' and ','."
+                        string("From class JsonParser(") + to_string(this) + "):Parse array error(c:" +
+                        std::to_string(m_Idx) + "):There is NOT a value between ',' and ','."
                 };
             } else {
                 throw logic_error{
-                    string("From class JsonParser(") + to_string(this) + "):Parse error(c:" + std::to_string(m_Idx) +
-                    "):Unexpected character '" + m_Str[m_Idx] + "'."
+                        string("From class JsonParser(") + to_string(this) + "):Parse error(c:" +
+                        std::to_string(m_Idx) +
+                        "):Unexpected character '" + m_Str[m_Idx] + "'."
                 };
             }
         }
@@ -807,195 +655,69 @@ Json JsonParser::parse_object() {
     Json json{JSON_OBJECT};
     if (m_Str[m_Idx] != '"') {
         throw logic_error{
-            string(
-                "From class JsonParser(" + to_string(this) + "):Parse object error(c:" + std::to_string(m_Idx) +
-                "):Unexpected character '" + m_Str[m_Idx] + "'. It should be '\"'.")
+                string(
+                        "From class JsonParser(" + to_string(this) + "):Parse object error(c:" + std::to_string(m_Idx) +
+                        "):Unexpected character '" + m_Str[m_Idx] + "'. It should be '\"'.")
         };
     }
     string key = parse_string();
     skip_white_space();
     if (m_Str[m_Idx] != ':') {
         throw logic_error{
-            string(
-                "From class JsonParser(" + to_string(this) + "):Parse object error(c:" + std::to_string(m_Idx) +
-                "):Unexpected character '" + m_Str[m_Idx] + "'. It should be ':'.")
+                string(
+                        "From class JsonParser(" + to_string(this) + "):Parse object error(c:" + std::to_string(m_Idx) +
+                        "):Unexpected character '" + m_Str[m_Idx] + "'. It should be ':'.")
         };
     }
     read_token_char();
-    json.m_Value->value.obj[key] = parse_json();
+    get<map<string, Json>>(*json.m_Value)[key] = parse_json();
     skip_white_space();
     while (m_Str[m_Idx] != '}') {
         if (m_Str[m_Idx] != ',') {
             throw logic_error{
-                string("From class JsonParser(") + to_string(this) + "):Parse object error(c:" + std::to_string(m_Idx) +
-                "):This str of Json misses a ','."
+                    string("From class JsonParser(") + to_string(this) + "):Parse object error(c:" +
+                    std::to_string(m_Idx) +
+                    "):This str of Json misses a ','."
             };
         }
         read_token_char();
         if (m_Str[m_Idx] != '"') {
             if (m_Str[m_Idx] == '}') {
                 throw logic_error{
-                    string("From class JsonParser(") + to_string(this) + "):Parse object error(c:" +
-                    std::to_string(m_Idx) + "):There is NOT a value between ',' and '}'."
+                        string("From class JsonParser(") + to_string(this) + "):Parse object error(c:" +
+                        std::to_string(m_Idx) + "):There is NOT a value between ',' and '}'."
                 };
             } else if (m_Str[m_Idx] == ',') {
                 throw logic_error{
-                    string("From class JsonParser(") + to_string(this) + "):Parse object error(c:" +
-                    std::to_string(m_Idx) + "):There is NOT a value between ',' and ','."
+                        string("From class JsonParser(") + to_string(this) + "):Parse object error(c:" +
+                        std::to_string(m_Idx) + "):There is NOT a value between ',' and ','."
                 };
             }
             throw logic_error{
-                string(
-                    "From class JsonParser(" + to_string(this) + "):Parse object error(c:" + std::to_string(m_Idx) +
-                    "):Unexpected character '" + m_Str[m_Idx] + "'. It should be '\"'.")
+                    string(
+                            "From class JsonParser(" + to_string(this) + "):Parse object error(c:" +
+                            std::to_string(m_Idx) +
+                            "):Unexpected character '" + m_Str[m_Idx] + "'. It should be '\"'.")
             };
         }
         key = parse_string();
         skip_white_space();
         if (m_Str[m_Idx] != ':') {
             throw logic_error{
-                string(
-                    "From class JsonParser(" + to_string(this) + "):Parse object error(c:" + std::to_string(m_Idx) +
-                    "):Unexpected character '" + m_Str[m_Idx] + "'. It should be ':'.")
+                    string(
+                            "From class JsonParser(" + to_string(this) + "):Parse object error(c:" +
+                            std::to_string(m_Idx) +
+                            "):Unexpected character '" + m_Str[m_Idx] + "'. It should be ':'.")
             };
         }
         read_token_char();
-        json.m_Value->value.obj[key] = parse_json();
+        get<map<string, Json>>(*json.m_Value)[key] = parse_json();
         skip_white_space();
     }
     m_Idx++;
     return json;
 }
 
-JsonParser::JsonParser(const std::string &str) {
-    m_Str = str;
-    m_Idx = 0;
-    m_Json = parse_json();
-}
-
 JsonParser::operator Json() {
     return m_Json;
-}
-
-void Json::self_separate() {
-    m_Value->quoteTimes--;
-    const JsonBasic &that = *m_Value;
-    m_Value = new JsonBasic();
-    this->copy_highest_layer(that);
-}
-
-JsonBasic::JsonBasic() {
-    type = JSON_NULL;
-}
-
-JsonBasic::JsonBasic(const bool &bl) {
-    type = JSON_BOOL;
-    value.bl = bl;
-}
-
-void JsonBasic::clear() {
-    switch (type) {
-        case JSON_STRING: {
-            value.str.~basic_string();
-            break;
-        }
-        case JSON_ARRAY: {
-            value.arr.~vector();
-            break;
-        }
-        case JSON_OBJECT: {
-            value.obj.~map();
-            break;
-        }
-        default: break;
-    }
-    type = JSON_NULL;
-}
-
-JsonBasic::JsonBasic(JsonType tp) {
-    type = tp;
-    switch (type) {
-        case JSON_STRING: {
-            new(&value.str) string{};
-            break;
-        }
-        case JSON_ARRAY: {
-            new(&value.arr) vector<Json>{};
-            break;
-        }
-        case JSON_OBJECT: {
-            new(&value.obj) map<string, Json>{};
-            break;
-        }
-        default: break;
-    }
-}
-
-JsonBasic::~JsonBasic() {
-    clear();
-}
-
-void JsonBasic::conversion_type(JsonType ttp) {
-    switch (type) {
-        case JSON_STRING: {
-            value.str.~basic_string();
-            break;
-        }
-        case JSON_ARRAY: {
-            value.arr.~vector();
-            break;
-        }
-        case JSON_OBJECT: {
-            value.obj.~map();
-            break;
-        }
-        default: break;
-    }
-    type = ttp;
-    switch (type) {
-        case JSON_STRING: {
-            new(&value.str) string{};
-            break;
-        }
-        case JSON_ARRAY: {
-            new(&value.arr) vector<Json>{};
-            break;
-        }
-        case JSON_OBJECT: {
-            new(&value.obj) map<string, Json>{};
-            break;
-        }
-        default: break;
-    }
-}
-
-JsonBasic::JsonBasic(const string &str) {
-    type = JSON_STRING;
-    new(&value.str) string{str};
-}
-
-JsonBasic::JsonBasic(const char *&chPtr) {
-    type = JSON_STRING;
-    new(&value.str) string(chPtr);
-}
-
-JsonBasic::JsonBasic(const int &it) {
-    type = JSON_INT;
-    value.it = it;
-}
-
-JsonBasic::JsonBasic(const double &dbl) {
-    type = JSON_FLOAT;
-    value.dbl = dbl;
-}
-
-JsonBasic::JsonBasic(const char &ch) {
-    type = JSON_STRING;
-    new(&value.str) string{1, ch};
-}
-
-JsonBasic::JsonBasic_Union::JsonBasic_Union() {
-}
-
-JsonBasic::JsonBasic_Union::~JsonBasic_Union() {
 }
