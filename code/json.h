@@ -102,7 +102,7 @@ public:
    JsonArrayProxy(JsonArrayProxy &&js) = delete;
 
    [[nodiscard]] unsigned int size() const;
-   void push_pack(const Json &js);
+   void push_back(const Json &js);
 };
 
 class JsonParser {
