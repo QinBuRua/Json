@@ -20,6 +20,8 @@ using std::map;
 using std::logic_error;
 using std::runtime_error;
 
+using JsonArray = vector<Json>;
+
 template<typename T>
 static string to_string(T content) {
    std::stringstream sstr;
@@ -98,9 +100,13 @@ Json::Json(const char *ch) {
    m_Value = make_shared<JsonBasic>(ch);
 }
 
-Json::Json(const Json &js) = default;
+Json::Json(const Json &js) {
+   m_Value = js.m_Value;
+}
 
-Json::Json(Json &&js) noexcept = default;
+Json::Json(Json &&js) noexcept {
+   m_Value = std::move(js.m_Value);
+}
 
 Json &Json::operator=(const bool &bl) {
    if (m_Value.use_count() > 1) {
@@ -361,10 +367,31 @@ std::string Json::str() const {
    return string{};
 }
 
+JsonArrayProxy Json::array() {
+   return JsonArrayProxy(m_Value);
+}
+
+const JsonArrayProxy Json::array() const {\
+   //危险！！！const强转可能有风险！！！
+   //dangerous!!!
+   return JsonArrayProxy(*const_cast<shared_ptr<JsonBasic> *>(&m_Value));
+}
+
+JsonArrayProxy::JsonArrayProxy(std::shared_ptr<JsonBasic> &jsb) : m_Value(jsb) {
+}
+
 JsonParser::JsonParser(const std::string &str) {
    m_Str = str;
    m_Idx = 0;
    m_Json = parse_json();
+}
+
+unsigned int JsonArrayProxy::size() const {
+   return get<JsonArray>(*m_Value).size();
+}
+
+void JsonArrayProxy::push_back(const Json &js) {
+   get<JsonArray>(*m_Value).push_back(js);
 }
 
 void JsonParser::read_token_char() {
