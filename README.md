@@ -1,4 +1,5 @@
 # Json对象&解析器
+This project is licensed under the Apache License.
 ## 优势
 在复制Json对象时，各个Json对象之间可以共用资源，<br>
 即在进行数组或对象操作时，可以确保闲置的子Json对象不会被重复复制。<br>
