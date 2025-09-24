@@ -1,3 +1,5 @@
+#include <future>
+
 #include "json.h"
 #include <stdexcept>
 #include <sstream>
@@ -16,11 +18,14 @@ using std::variant;
 using std::string;
 using std::vector;
 using std::map;
+using std::initializer_list;
+using std::pair;
 
 using std::logic_error;
 using std::runtime_error;
 
 using JsonArray = vector<Json>;
+using JsonObject = map<string, Json>;
 
 template<typename T>
 static string to_string(T content) {
@@ -42,8 +47,6 @@ const std::vector<std::string> json::JSON_TYPE_TO_STRING{
 Json::Json() {
    m_Value = make_shared<JsonBasic>(Void{});
 }
-
-Json::~Json() = default;
 
 Json::Json(const JsonType &tp) {
    switch (tp) {
@@ -108,7 +111,9 @@ Json::Json(Json &&js) noexcept {
    m_Value = std::move(js.m_Value);
 }
 
-Json &Json::operator=(const bool &bl) {
+Json::~Json() = default;
+
+Json& Json::operator=(const bool &bl) {
    if (m_Value.use_count() > 1) {
       m_Value = make_shared<JsonBasic>(bl);
    } else {
@@ -117,7 +122,7 @@ Json &Json::operator=(const bool &bl) {
    return *this;
 }
 
-Json &Json::operator=(const int &it) {
+Json& Json::operator=(const int &it) {
    if (m_Value.use_count() > 1) {
       m_Value = make_shared<JsonBasic>(it);
    } else {
@@ -126,7 +131,7 @@ Json &Json::operator=(const int &it) {
    return *this;
 }
 
-Json &Json::operator=(const char &ch) {
+Json& Json::operator=(const char &ch) {
    if (m_Value.use_count() > 1) {
       m_Value = make_shared<JsonBasic>(string{ch, 1});
    } else {
@@ -135,7 +140,7 @@ Json &Json::operator=(const char &ch) {
    return *this;
 }
 
-Json &Json::operator=(const char *chPtr) {
+Json& Json::operator=(const char *chPtr) {
    if (m_Value.use_count() > 1) {
       m_Value = make_shared<JsonBasic>(std::move(string{chPtr}));
    } else {
@@ -144,7 +149,7 @@ Json &Json::operator=(const char *chPtr) {
    return *this;
 }
 
-Json &Json::operator=(const std::string &str) {
+Json& Json::operator=(const std::string &str) {
    if (m_Value.use_count() > 1) {
       m_Value = make_shared<JsonBasic>(str);
    } else {
@@ -153,28 +158,28 @@ Json &Json::operator=(const std::string &str) {
    return *this;
 }
 
-Json &Json::operator=(const Json &js) {
+Json& Json::operator=(const Json &js) {
    m_Value = js.m_Value;
    return *this;
 }
 
-Json &Json::operator=(Json &&js) noexcept = default;
+Json& Json::operator=(Json &&js) noexcept = default;
 
-Json &Json::operator[](unsigned int n) {
+Json& Json::operator[](unsigned int n) {
    if (m_Value.use_count() > 1) {
       m_Value = make_shared<JsonBasic>(get<vector<Json>>(*m_Value));
    }
    return get<vector<Json>>(*m_Value)[n];
 }
 
-Json &Json::operator[](const std::string &str) {
+Json& Json::operator[](const std::string &str) {
    if (m_Value.use_count() > 1) {
       m_Value = make_shared<JsonBasic>(get<map<string, Json>>(*m_Value));
    }
    return get<map<string, Json>>(*m_Value)[str];
 }
 
-Json &Json::operator[](const char *chPtr) {
+Json& Json::operator[](const char *chPtr) {
    if (m_Value.use_count() > 1) {
       m_Value = make_shared<JsonBasic>(get<map<string, Json>>(*m_Value));
    }
@@ -269,6 +274,8 @@ void Json::copy(const Json &js) {
       }
       break;
    }
+   default: throw runtime_error(
+         "Unexpected Situation!!! The program come to an impossible place!!! Check your memory action!!!");
    }
 }
 
@@ -371,19 +378,16 @@ JsonArrayProxy Json::array() {
    return JsonArrayProxy(m_Value);
 }
 
-const JsonArrayProxy Json::array() const {\
-   //危险！！！const强转可能有风险！！！
-   //dangerous!!!
+const JsonArrayProxy Json::array() const {
    return JsonArrayProxy(*const_cast<shared_ptr<JsonBasic> *>(&m_Value));
 }
 
-JsonArrayProxy::JsonArrayProxy(std::shared_ptr<JsonBasic> &jsb) : m_Value(jsb) {
+JsonObjectProxy Json::object() {
+   return JsonObjectProxy(m_Value);
 }
 
-JsonParser::JsonParser(const std::string &str) {
-   m_Str = str;
-   m_Idx = 0;
-   m_Json = parse_json();
+const JsonObjectProxy Json::object() const {
+   return JsonObjectProxy(*const_cast<std::shared_ptr<JsonBasic> *>(&m_Value));
 }
 
 unsigned int JsonArrayProxy::size() const {
@@ -392,6 +396,16 @@ unsigned int JsonArrayProxy::size() const {
 
 void JsonArrayProxy::push_back(const Json &js) {
    get<JsonArray>(*m_Value).push_back(js);
+}
+
+JsonArrayProxy::JsonArrayProxy(std::shared_ptr<JsonBasic> &jsb) : m_Value(jsb) {
+}
+
+void JsonObjectProxy::insert(std::pair<const std::string, Json> pr) {
+   get<JsonObject>(*m_Value).insert(std::move(pr));
+}
+
+JsonObjectProxy::JsonObjectProxy(std::shared_ptr<JsonBasic> &jsb) : m_Value(jsb) {
 }
 
 void JsonParser::read_token_char() {
@@ -660,6 +674,12 @@ Json JsonParser::parse_object() {
    }
    m_Idx++;
    return json;
+}
+
+JsonParser::JsonParser(const std::string &str) {
+   m_Str = str;
+   m_Idx = 0;
+   m_Json = parse_json();
 }
 
 JsonParser::operator Json() {

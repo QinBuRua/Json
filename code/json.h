@@ -1,5 +1,5 @@
-#ifndef JSON_UPDATED_JSON_H
-#define JSON_UPDATED_JSON_H
+#ifndef CODE_JSON_H
+#define CODE_JSON_H
 
 #include <string>
 #include <vector>
@@ -27,6 +27,7 @@ class JsonView;
 class JsonParser;
 
 class JsonArrayProxy;
+class JsonObjectProxy;
 
 extern const std::vector<std::string> JSON_TYPE_TO_STRING;
 
@@ -41,10 +42,6 @@ using JsonBasic = std::variant<
 >;
 
 class Json {
-private:
-   std::shared_ptr<JsonBasic> m_Value;
-   friend class JsonParser;
-   friend class JsonArrayProxy;
 
 public:
    Json();
@@ -59,17 +56,17 @@ public:
 
    ~Json();
 
-   Json &operator=(const bool &bl);
-   Json &operator=(const int &it);
-   Json &operator=(const char &ch);
-   Json &operator=(const char *chPtr);
-   Json &operator=(const std::string &str);
-   Json &operator=(const Json &js);
-   Json &operator=(Json &&js) noexcept;
+   Json& operator=(const bool &bl);
+   Json& operator=(const int &it);
+   Json& operator=(const char &ch);
+   Json& operator=(const char *chPtr);
+   Json& operator=(const std::string &str);
+   Json& operator=(const Json &js);
+   Json& operator=(Json &&js) noexcept;
 
-   Json &operator[](unsigned int n);
-   Json &operator[](const std::string &str);
-   Json &operator[](const char *chPtr);
+   Json& operator[](unsigned int n);
+   Json& operator[](const std::string &str);
+   Json& operator[](const char *chPtr);
 
    explicit operator bool();
    explicit operator int();
@@ -87,13 +84,20 @@ public:
 
    [[nodiscard]] JsonArrayProxy array();
    [[nodiscard]] const JsonArrayProxy array() const;
+
+   [[nodiscard]] JsonObjectProxy object();
+   [[nodiscard]] const JsonObjectProxy object() const;
+
+private:
+   std::shared_ptr<JsonBasic> m_Value;
+   friend class JsonParser;
 };
 
 class JsonArrayProxy {
-private:
-   std::shared_ptr<JsonBasic> &m_Value;
-
 public:
+   [[nodiscard]] unsigned int size() const;
+   void push_back(const Json &js);
+
    explicit JsonArrayProxy(std::shared_ptr<JsonBasic> &jsb);
 
    JsonArrayProxy() = delete;
@@ -101,8 +105,23 @@ public:
    JsonArrayProxy(JsonArrayProxy &js) = delete;
    JsonArrayProxy(JsonArrayProxy &&js) = delete;
 
-   [[nodiscard]] unsigned int size() const;
-   void push_back(const Json &js);
+private:
+   std::shared_ptr<JsonBasic> &m_Value;
+};
+
+class JsonObjectProxy {
+public:
+   void insert(std::pair<const std::string, Json> pr);
+
+   explicit JsonObjectProxy(std::shared_ptr<JsonBasic> &jsb);
+
+   JsonObjectProxy() = delete;
+   JsonObjectProxy(const JsonObjectProxy &js) = delete;
+   JsonObjectProxy(JsonObjectProxy &js) = delete;
+   JsonObjectProxy(JsonObjectProxy &&js) = delete;
+
+private:
+   std::shared_ptr<JsonBasic> &m_Value;
 };
 
 class JsonParser {
@@ -126,6 +145,9 @@ public:
    JsonParser(const std::string &str);
    operator Json();
 };
+
+#include "json.inl"
+
 }
 
-#endif //JSON_UPDATED_JSON_H
+#endif //CODE_JSON_H
