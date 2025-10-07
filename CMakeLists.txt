@@ -3,9 +3,9 @@ project(json_git)
 
 set(CMAKE_CXX_STANDARD 17)
 
-include_directories(code)
+include_directories(code/include)
 
 add_executable(json_git
-        code/json.h
-        code/src.cpp
-        code/test_main.cpp)
+        code/include/json.h
+        code/src/src.cpp
+        code/src/test_main.cpp)

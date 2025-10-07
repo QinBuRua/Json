@@ -1,5 +1,3 @@
-#include <future>
-
 #include "json.h"
 #include <stdexcept>
 #include <sstream>
